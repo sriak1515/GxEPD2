@@ -60,6 +60,9 @@
 #if __has_include("epd4c/GxEPD2_300c.h")
 #include "epd4c/GxEPD2_300c.h"
 #endif
+#if __has_include("epd4c/GxEPD2_370c_GDEM037F51.h")
+#include "epd4c/GxEPD2_370c_GDEM037F51.h"
+#endif
 #if __has_include("epd4c/GxEPD2_420c_GDEY0420F51.h")
 #include "epd4c/GxEPD2_420c_GDEY0420F51.h"
 #endif
