@@ -27,7 +27,7 @@ class GxEPD2_750c_GDEY075Z08 : public GxEPD2_EPD
     static const bool hasColor = true;
     static const bool hasPartialUpdate = true;
     static const bool usePartialUpdate = true; // set false to get better image (flashes full screen)
-    static const bool hasFastPartialUpdate = true;
+    static const bool hasFastPartialUpdate = false;
     static const bool useFastFullUpdate = true; // set false for extended (low) temperature range
     static const uint16_t power_on_time = 150; // ms, e.g. 133421us
     static const uint16_t power_off_time = 30; // ms, e.g. 25362us
@@ -68,7 +68,11 @@ class GxEPD2_750c_GDEY075Z08 : public GxEPD2_EPD
     void refresh(int16_t x, int16_t y, int16_t w, int16_t h); // screen refresh from controller memory, partial screen
     void powerOff(); // turns off generation of panel driving voltages, avoids screen fading over time
     void hibernate(); // turns powerOff() and sets controller to deep sleep for minimum power use, ONLY if wakeable by RST (rst >= 0)
+    void enableFastPartialMode();
+    void disableFastPartialMode();
   private:
+    bool _isFastPartialMode = false;
+    bool _isFastPartialModeInitial = false;
     void _writeScreenBuffer(uint8_t value);
     void _setPartialRamArea(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
     void _PowerOn();

@@ -26,7 +26,8 @@ void GxEPD2_750c_GDEY075Z08::clearScreen(uint8_t value)
 void GxEPD2_750c_GDEY075Z08::clearScreen(uint8_t black_value, uint8_t color_value)
 {
   _initial_write = false; // initial full screen buffer clean done
-  _Init_Part();
+  if (!_isFastPartialMode)
+    _Init_Part();
   _writeCommand(0x91); // partial in
   _setPartialRamArea(0, 0, WIDTH, HEIGHT);
   _writeCommand(0x10);
@@ -55,7 +56,8 @@ void GxEPD2_750c_GDEY075Z08::writeScreenBuffer(uint8_t value)
 void GxEPD2_750c_GDEY075Z08::writeScreenBuffer(uint8_t black_value, uint8_t color_value)
 {
   _initial_write = false; // initial full screen buffer clean done
-  _Init_Part();
+  if (!_isFastPartialMode)
+    _Init_Part();
   _writeCommand(0x91); // partial in
   _setPartialRamArea(0, 0, WIDTH, HEIGHT);
   _writeCommand(0x10);
@@ -96,10 +98,31 @@ void GxEPD2_750c_GDEY075Z08::writeImage(const uint8_t* black, const uint8_t* col
   w1 -= dx;
   h1 -= dy;
   if ((w1 <= 0) || (h1 <= 0)) return;
-  _Init_Part();
+  if (!_isFastPartialMode)
+    _Init_Part();
   _writeCommand(0x91); // partial in
   _setPartialRamArea(x1, y1, w1, h1);
-  _writeCommand(0x10);
+  Serial.print("Writing image, we are ");
+  Serial.print(_isFastPartialMode ? "" : "not ");
+  Serial.println("in fastPartialMode;");
+  if (_isFastPartialModeInitial) {
+    _writeCommand(0x10);
+  _startTransfer();
+  for (int16_t i = 0; i < h1; i++)
+  {
+    for (int16_t j = 0; j < w1 / 8; j++)
+    {
+      _transfer(0xFF);
+    }
+  }
+  _endTransfer();
+  _isFastPartialModeInitial = false;
+  }
+  if (!_isFastPartialMode) {
+    _writeCommand(0x10);
+  } else {
+    _writeCommand(0x13);
+  }
   _startTransfer();
   for (int16_t i = 0; i < h1; i++)
   {
@@ -128,6 +151,7 @@ void GxEPD2_750c_GDEY075Z08::writeImage(const uint8_t* black, const uint8_t* col
     }
   }
   _endTransfer();
+  if (!_isFastPartialMode) {
   _writeCommand(0x13);
   _startTransfer();
   for (int16_t i = 0; i < h1; i++)
@@ -157,6 +181,7 @@ void GxEPD2_750c_GDEY075Z08::writeImage(const uint8_t* black, const uint8_t* col
     }
   }
   _endTransfer();
+  }
   _writeCommand(0x92); // partial out
   delay(1); // yield() to avoid WDT on ESP8266 and ESP32
 }
@@ -190,7 +215,7 @@ void GxEPD2_750c_GDEY075Z08::writeImagePart(const uint8_t* black, const uint8_t*
   w1 -= dx;
   h1 -= dy;
   if ((w1 <= 0) || (h1 <= 0)) return;
-  if (!_using_partial_mode) _Init_Part();
+  if (!_using_partial_mode && !_isFastPartialMode) _Init_Part();
   _writeCommand(0x91); // partial in
   _setPartialRamArea(x1, y1, w1, h1);
   _writeCommand(0x10);
@@ -312,7 +337,8 @@ void GxEPD2_750c_GDEY075Z08::refresh(int16_t x, int16_t y, int16_t w, int16_t h)
   w1 += x1 % 8;
   if (w1 % 8 > 0) w1 += 8 - w1 % 8;
   x1 -= x1 % 8;
-  _Init_Part();
+  if(!_isFastPartialMode)
+    _Init_Part();
   if (usePartialUpdate) _writeCommand(0x91); // partial in
   _setPartialRamArea(x1, y1, w1, h1);
   _Update_Part();
@@ -333,6 +359,33 @@ void GxEPD2_750c_GDEY075Z08::hibernate()
     _writeData(0xA5);    // check code
     _hibernating = true;
   }
+}
+
+void GxEPD2_750c_GDEY075Z08::enableFastPartialMode()
+{
+  _InitDisplay();
+  _writeCommand(0X00);			//PANNEL SETTING
+  _writeData(0x1F);   //KW-3f   KWR-2F	BWROTP 0f	BWOTP 1f
+
+  _writeCommand(0xE0);
+  _writeData(0x02);
+  _writeCommand(0xE5);
+  _writeData(0x6E);
+
+  _writeCommand(0x50); //VCOM AND DATA INTERVAL SETTING
+  _writeData(0xA9);
+  _writeData(0x07);
+
+  _PowerOn();
+  _using_partial_mode = true;
+  _isFastPartialMode = true;
+  _isFastPartialModeInitial = true;
+}
+
+void GxEPD2_750c_GDEY075Z08::disableFastPartialMode()
+{
+  _Init_Part();
+  _isFastPartialMode = true;
 }
 
 void GxEPD2_750c_GDEY075Z08::_setPartialRamArea(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
@@ -399,32 +452,7 @@ void GxEPD2_750c_GDEY075Z08::_InitDisplay()
   _writeData(0x07);
   _writeCommand(0x60); //TCON SETTING
   _writeData(0x22);
-}
 
-void GxEPD2_750c_GDEY075Z08::_Init_Full()
-{
-  _InitDisplay();
-  _PowerOn();
-  _using_partial_mode = false;
-}
-
-void GxEPD2_750c_GDEY075Z08::_Init_Part()
-{
-  _InitDisplay();
-  _writeCommand(0X00);			//PANNEL SETTING
-  _writeData(0x1F);   //KW-3f   KWR-2F	BWROTP 0f	BWOTP 1f
-
-  _writeCommand(0xE0);
-  _writeData(0x02);
-  _writeCommand(0xE5);
-  _writeData(0x6E);
-		
-  _PowerOn();
-  _using_partial_mode = true;
-}
-
-void GxEPD2_750c_GDEY075Z08::_Update_Full()
-{
   if (useFastFullUpdate)
   {
     _writeCommand(0xE0); // Cascade Setting (CCSET)
@@ -439,6 +467,41 @@ void GxEPD2_750c_GDEY075Z08::_Update_Full()
     _writeCommand(0x41); // TSE, Enable Temperature Sensor
     _writeData(0x00);    // TSE, Internal temperature sensor switch
   }
+
+}
+
+void GxEPD2_750c_GDEY075Z08::_Init_Full()
+{
+  Serial.println("We are initializing full.");
+  _InitDisplay();
+  _PowerOn();
+  _using_partial_mode = false;
+  _isFastPartialMode = false;
+}
+
+void GxEPD2_750c_GDEY075Z08::_Init_Part()
+{
+  Serial.println("We are initializing partial.");
+  _InitDisplay();
+ // _writeCommand(0X00);			//PANNEL SETTING
+ // _writeData(0x1F);   //KW-3f   KWR-2F	BWROTP 0f	BWOTP 1f
+
+ // _writeCommand(0x50); //VCOM AND DATA INTERVAL SETTING
+ // _writeData(0xA9);
+ // _writeData(0x07);
+
+ // _writeCommand(0xE0);
+ // _writeData(0x02);
+ // _writeCommand(0xE5);
+ // _writeData(0x6E);
+	//	
+  _PowerOn();
+  _using_partial_mode = true;
+  _isFastPartialMode = false;
+}
+
+void GxEPD2_750c_GDEY075Z08::_Update_Full()
+{
   _writeCommand(0x12); //display refresh
   _waitWhileBusy("_Update_Full", full_refresh_time);
 }
